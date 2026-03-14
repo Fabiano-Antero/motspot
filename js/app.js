@@ -107,6 +107,74 @@
     let watchId = null;
     const MAX_PIN_DISTANCE_METERS = 100;
 
+    const APP_TIMEZONE_OFFSET_MINUTES = -3 * 60;
+    let cleanupExpiredPinsPromise = null;
+
+    function obterDataNoFusoDaOperacao(base = new Date()) {
+      return new Date(base.getTime() + APP_TIMEZONE_OFFSET_MINUTES * 60000);
+    }
+
+    function obterDayKeyDaOperacao(base = new Date()) {
+      const data = obterDataNoFusoDaOperacao(base);
+      const ano = data.getUTCFullYear();
+      const mes = String(data.getUTCMonth() + 1).padStart(2, "0");
+      const dia = String(data.getUTCDate()).padStart(2, "0");
+      return `${ano}-${mes}-${dia}`;
+    }
+
+    function obterIsoDaProximaMeiaNoite(base = new Date()) {
+      const data = obterDataNoFusoDaOperacao(base);
+      data.setUTCHours(24, 0, 0, 0);
+      return new Date(data.getTime() - APP_TIMEZONE_OFFSET_MINUTES * 60000).toISOString();
+    }
+
+    function pinExpirou(marcacao, agora = new Date()) {
+      if (!marcacao) return true;
+      if (marcacao.expires_at) {
+        const expiraEm = new Date(marcacao.expires_at);
+        if (!Number.isNaN(expiraEm.getTime())) return agora >= expiraEm;
+      }
+      if (marcacao.day_key) return marcacao.day_key !== obterDayKeyDaOperacao(agora);
+      if (marcacao.timestamp) {
+        const criadaEm = new Date(marcacao.timestamp);
+        if (!Number.isNaN(criadaEm.getTime())) {
+          return obterDayKeyDaOperacao(criadaEm) !== obterDayKeyDaOperacao(agora);
+        }
+      }
+      return false;
+    }
+
+    async function limparPinsExpirados(dados = dadosCache, opcoes = {}) {
+      const { silencioso = true, mostrarToastQuandoLimpar = false } = opcoes;
+      if (!dados) return 0;
+      if (cleanupExpiredPinsPromise) return cleanupExpiredPinsPromise;
+
+      const expirados = Object.entries(dados).filter(([, m]) => pinExpirou(m));
+      if (!expirados.length) return 0;
+
+      cleanupExpiredPinsPromise = (async () => {
+        let removidos = 0;
+        await Promise.all(expirados.map(async ([key]) => {
+          try {
+            await DB.ref(`marcacoes/${key}`).remove();
+            removidos++;
+          } catch (erro) {
+            if (!silencioso) console.error(erro);
+          }
+        }));
+        if (removidos && mostrarToastQuandoLimpar) {
+          mostrarToast(removidos === 1 ? "🕛 1 pin do dia anterior foi removido." : `🕛 ${removidos} pins do dia anterior foram removidos.`);
+        }
+        return removidos;
+      })();
+
+      try {
+        return await cleanupExpiredPinsPromise;
+      } finally {
+        cleanupExpiredPinsPromise = null;
+      }
+    }
+
     function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
       const toRad = v => v * Math.PI / 180;
       const R = 6371000;
@@ -715,10 +783,14 @@
       const horario  = EL.inputHorario.value || horaAtual();
       const cfg  = STATUS[statusSelecionado];
       const peso = Math.min(cfg.base + corridas * 0.03, 1.0);
+      const agora = new Date();
       abrirConfirmacao({
         lat: latSelecionada, lng: lngSelecionada,
         status: statusSelecionado, corridas, horario_inicio: horario,
-        timestamp: new Date().toISOString(), peso, session_id: SESSION_ID
+        timestamp: agora.toISOString(),
+        day_key: obterDayKeyDaOperacao(agora),
+        expires_at: obterIsoDaProximaMeiaNoite(agora),
+        peso, session_id: SESSION_ID
       }, cfg);
     });
 
@@ -732,6 +804,7 @@
       dadosCache = snapshot.val();
       clearTimeout(renderTimer);
       renderTimer = setTimeout(renderizarMapa, 200);
+      limparPinsExpirados(dadosCache, { silencioso: false }).catch(console.error);
     });
 
     function renderizarMapa() {
@@ -742,7 +815,7 @@
 
       if (data) {
         Object.entries(data).forEach(([key, m]) => {
-          if (!STATUS[m.status]) return;
+          if (!STATUS[m.status] || pinExpirou(m)) return;
           total++;
           if      (m.status === "chamando_muito") muito++;
           else if (m.status === "chamando_pouco") pouco++;
@@ -773,80 +846,39 @@
       const dtFmt = d.toLocaleDateString("pt-BR");
       const hrFmt = d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 
-      const rodape = isOwn
-        ? `<button onclick="window._removerPin('${key}')" class="popup-pin-remove-btn">🗑️ Remover minha marcação</button>`
-        : `<div class="popup-pin-other-note">🔒 Marcação de outro entregador</div>`;
+      const expiraEm = m.expires_at
+        ? new Date(m.expires_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+        : "00:00";
+      const rodape = `<div class="popup-pin-other-note">🕛 Visível para todos até ${expiraEm}</div>`;
 
       L.marker([m.lat, m.lng], { icon: getIcon(m.status, isOwn) })
-        .bindPopup(`<strong>${cfg.icon} ${cfg.label}</strong>🛵 Corridas: <b>${m.corridas}</b><br>⏰ Início: <b>${m.horario_inicio||"—"}</b><br>📅 ${dtFmt} às ${hrFmt}<br>${rodape}`, { maxWidth: 250 })
+        .bindPopup(`<strong>${cfg.icon} ${cfg.label}</strong><br>🛵 Corridas: <b>${m.corridas}</b><br>⏰ Início: <b>${m.horario_inicio||"—"}</b><br>📅 ${dtFmt} às ${hrFmt}<br>${rodape}`, { maxWidth: 250 })
         .addTo(markersLayer);
     }
 
     /* ================================================
-       MODAL REMOÇÃO DE PIN
+       REMOÇÃO MANUAL DESABILITADA
     ================================================ */
-    (function() {
-      const el = document.createElement("div");
-      el.id = "modal-remover";
-      el.innerHTML = `
-        <div id="remover-card">
-          <div class="remover-head">
-            <div class="remover-icon-wrap">🗑️</div>
-            <div>
-              <div class="remover-title">Remover marcação?</div>
-              <div class="remover-subtitle">Esta ação não pode ser desfeita.</div>
-            </div>
-          </div>
-          <div id="remover-info" class="remover-info"></div>
-          <div class="remover-actions">
-            <button id="remover-nao" class="btn-remover secundario">← Cancelar</button>
-            <button id="remover-sim" class="btn-remover primario">🗑️ Remover</button>
-          </div>
-        </div>`;
-      document.body.appendChild(el);
-
-      let keyPendente = null;
-
-      const abrir  = (key, info) => {
-        keyPendente = key;
-        $("remover-info").innerHTML = info;
-        el.classList.add("ativo");
-      };
-      const fechar = () => {
-        el.classList.remove("ativo");
-        keyPendente = null;
-      };
-
-      $("remover-nao").addEventListener("click", fechar);
-      el.addEventListener("click", e => { if (e.target === el) fechar(); });
-      $("remover-sim").addEventListener("click", async () => {
-        if (!keyPendente) return;
-        const k = keyPendente;
-        fechar();
-        try {
-          await DB.ref("marcacoes/" + k).remove();
-          mostrarToast("✅ Marcação removida!");
-        } catch (e) {
-          mostrarToast("❌ Erro ao remover."); console.error(e);
-        }
-      });
-
-      window._removerPin = key => {
-        map.closePopup();
-        abrir(key, "📌 Você está prestes a remover um pin que <b class='remover-highlight'>você adicionou</b>.");
-      };
-    })();
+    window._removerPin = () => {
+      map.closePopup();
+      mostrarToast("🕛 Os pins ficam visíveis para todos e só somem após a meia-noite.");
+    };
 
     /* ================================================
        LIMPEZA AUTOMÁTICA À MEIA-NOITE
     ================================================ */
     (function agendarLimpeza() {
       const agora = new Date();
-      const meia  = new Date(agora); meia.setHours(24,0,0,0);
+      const proximaMeiaNoite = new Date(obterIsoDaProximaMeiaNoite(agora));
       setTimeout(async () => {
-        try { await REF.remove(); mostrarToast("🕛 Meia-noite — mapa limpo!"); } catch(e) { console.error(e); }
+        try {
+          const removidos = await limparPinsExpirados(dadosCache, { silencioso: false, mostrarToastQuandoLimpar: true });
+          if (!removidos) mostrarToast("🕛 Virou o dia. O mapa está pronto para novas marcações.");
+        } catch(e) {
+          console.error(e);
+        }
         agendarLimpeza();
-      }, meia - agora);
+      }, Math.max(1000, proximaMeiaNoite - agora));
     })();
 
     /* ================================================
