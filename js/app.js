@@ -84,6 +84,7 @@
       statUltima:    $("stat-ultima"),
       logo:          $("logo"),
       btnBusca:      $("btn-busca"),
+      btnShareQr:    $("btn-share-qr"),
       buscaBarra:    $("busca-barra"),
       buscaInput:    $("busca-input"),
       buscaFechar:   $("busca-fechar"),
@@ -95,7 +96,10 @@
       geoPermissionModal:   $("geo-permission-modal"),
       geoPermissionClose:   $("geo-permission-close"),
       geoPermissionCancel:  $("geo-permission-cancel"),
-      geoPermissionConfirm: $("geo-permission-confirm")
+      geoPermissionConfirm: $("geo-permission-confirm"),
+      qrShareModal:   $("qr-share-modal"),
+      qrShareClose:   $("qr-share-close"),
+      qrShareCopy:    $("qr-share-copy")
     };
 
     /* ================================================
@@ -106,6 +110,7 @@
     let geoPendentes = [];
     let watchId = null;
     const MAX_PIN_DISTANCE_METERS = 100;
+    const APP_SHARE_URL = "https://motspot.solveasy.workers.dev/";
 
     function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
       const toRad = v => v * Math.PI / 180;
@@ -224,6 +229,42 @@
         timeout: 15000,
         maximumAge: 0
       });
+    }
+
+    function abrirModalQrShare() {
+      if (!EL.qrShareModal) return;
+      EL.qrShareModal.hidden = false;
+      EL.qrShareModal.classList.add("ativo");
+      document.body.classList.add("qr-share-open");
+    }
+
+    function fecharModalQrShare() {
+      if (!EL.qrShareModal) return;
+      EL.qrShareModal.hidden = true;
+      EL.qrShareModal.classList.remove("ativo");
+      document.body.classList.remove("qr-share-open");
+    }
+
+    async function copiarLinkDoApp() {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(APP_SHARE_URL);
+        } else {
+          const area = document.createElement("textarea");
+          area.value = APP_SHARE_URL;
+          area.setAttribute("readonly", "");
+          area.style.position = "absolute";
+          area.style.left = "-9999px";
+          document.body.appendChild(area);
+          area.select();
+          document.execCommand("copy");
+          document.body.removeChild(area);
+        }
+        mostrarToast("✅ Link copiado!");
+      } catch (err) {
+        console.error(err);
+        mostrarToast("⚠️ Não foi possível copiar o link.");
+      }
     }
 
     function iniciarWatch() {
@@ -1073,6 +1114,7 @@
       EL.buscaBarra.classList.add("aberta");
       EL.logo.classList.add("oculto");
       EL.btnBusca.classList.add("oculto");
+      EL.btnShareQr && EL.btnShareQr.classList.add("oculto");
       const hint = geoCtx.cidade ? `Buscar em ${geoCtx.cidade}...` : "Buscar bairro ou estabelecimento...";
       EL.buscaInput.placeholder = hint;
       setTimeout(() => EL.buscaInput.focus(), 200);
@@ -1082,13 +1124,25 @@
       EL.buscaResWrap.classList.remove("visivel");
       EL.logo.classList.remove("oculto");
       EL.btnBusca.classList.remove("oculto");
+      EL.btnShareQr && EL.btnShareQr.classList.remove("oculto");
       EL.buscaInput.value = "";
       EL.buscaRes.innerHTML = "";
     }
 
     EL.btnBusca.addEventListener("click", abrirBusca);
+    EL.btnShareQr && EL.btnShareQr.addEventListener("click", abrirModalQrShare);
     EL.buscaFechar.addEventListener("click", fecharBusca);
-    document.addEventListener("keydown", e => { if (e.key === "Escape") fecharBusca(); });
+    EL.qrShareClose && EL.qrShareClose.addEventListener("click", fecharModalQrShare);
+    EL.qrShareCopy && EL.qrShareCopy.addEventListener("click", copiarLinkDoApp);
+    EL.qrShareModal && EL.qrShareModal.addEventListener("click", e => {
+      if (e.target === EL.qrShareModal) fecharModalQrShare();
+    });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") {
+        fecharBusca();
+        fecharModalQrShare();
+      }
+    });
 
     // Chips de filtro
     document.querySelectorAll(".busca-chip").forEach(chip => {
