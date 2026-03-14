@@ -314,6 +314,23 @@
     </div>
   </div>
 
+
+  <!-- Modal de aviso antes da permissão de localização -->
+  <div id="geo-permission-modal" class="geo-permission-modal" hidden>
+    <div class="geo-permission-dialog" role="dialog" aria-modal="true" aria-labelledby="geo-permission-title">
+      <button type="button" class="geo-permission-close" id="geo-permission-close" aria-label="Fechar aviso">✕</button>
+      <div class="geo-permission-icon" aria-hidden="true">📍</div>
+      <div class="geo-permission-kicker">Permissão de localização</div>
+      <h2 id="geo-permission-title" class="geo-permission-title">Antes de continuar, feche o botão flutuante do iFood</h2>
+      <p class="geo-permission-text">Isso ajuda a janela de permissão aparecer corretamente e evita que o botão fique sobre o aviso do sistema.</p>
+      <div class="geo-permission-note">Depois de fechar o botão, toque em <strong>Continuar</strong> para liberar sua localização.</div>
+      <div class="geo-permission-actions">
+        <button type="button" class="geo-permission-btn secundario" id="geo-permission-cancel">Agora não</button>
+        <button type="button" class="geo-permission-btn primario" id="geo-permission-confirm">Continuar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast -->
   <div id="toast"></div>
 

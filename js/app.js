@@ -91,7 +91,11 @@
       buscaResWrap:  $("busca-resultados-wrap"),
       buscaTagAtivo: $("busca-tag-ativo"),
       buscaTagNome:  $("busca-tag-nome"),
-      buscaTagFechar:$("busca-tag-fechar")
+      buscaTagFechar:$("busca-tag-fechar"),
+      geoPermissionModal:   $("geo-permission-modal"),
+      geoPermissionClose:   $("geo-permission-close"),
+      geoPermissionCancel:  $("geo-permission-cancel"),
+      geoPermissionConfirm: $("geo-permission-confirm")
     };
 
     /* ================================================
@@ -143,19 +147,87 @@
       console.warn("Geo:", err.message);
     }
 
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(onGeoPosicao, onGeoErro, {
+    let fluxoGeoHabilitado = false;
+    let modalGeoResolver = null;
+
+    async function obterEstadoPermissaoGeo() {
+      if (!navigator.permissions || !navigator.permissions.query) return "prompt";
+      try {
+        const status = await navigator.permissions.query({ name: "geolocation" });
+        return status.state || "prompt";
+      } catch (e) {
+        return "prompt";
+      }
+    }
+
+    function fecharModalPermissaoGeo(decisao = false) {
+      if (!EL.geoPermissionModal) return;
+      EL.geoPermissionModal.hidden = true;
+      EL.geoPermissionModal.classList.remove("ativo");
+      document.body.classList.remove("geo-permission-open");
+      const resolver = modalGeoResolver;
+      modalGeoResolver = null;
+      if (resolver) resolver(decisao);
+    }
+
+    function abrirModalPermissaoGeo() {
+      if (!EL.geoPermissionModal) return Promise.resolve(true);
+      if (modalGeoResolver) return Promise.resolve(false);
+      EL.geoPermissionModal.hidden = false;
+      EL.geoPermissionModal.classList.add("ativo");
+      document.body.classList.add("geo-permission-open");
+      return new Promise(resolve => {
+        modalGeoResolver = resolve;
+      });
+    }
+
+    async function confirmarAvisoAntesDaGeo() {
+      const estado = await obterEstadoPermissaoGeo();
+      if (estado === "granted") {
+        fluxoGeoHabilitado = true;
+        return true;
+      }
+      const continuar = await abrirModalPermissaoGeo();
+      if (continuar) fluxoGeoHabilitado = true;
+      return continuar;
+    }
+
+    async function solicitarLocalizacaoComAviso(onSuccess, onError, options = {}) {
+      if (!("geolocation" in navigator)) {
+        onError && onError({ code: "geo_unavailable", message: "Geolocalização não disponível." });
+        return false;
+      }
+      const permitido = await confirmarAvisoAntesDaGeo();
+      if (!permitido) {
+        onError && onError({ code: "geo_pre_prompt_cancelled", message: "Solicitação de localização cancelada antes da permissão." });
+        return false;
+      }
+      navigator.geolocation.getCurrentPosition(onSuccess, onError, options);
+      return true;
+    }
+
+    function solicitarLocalizacaoInicial() {
+      if (!("geolocation" in navigator)) {
+        EL.loadingMsg.textContent = "Geolocalização não disponível.";
+        setTimeout(() => EL.loading.classList.add("oculto"), 2000);
+        return;
+      }
+      solicitarLocalizacaoComAviso(onGeoPosicao, err => {
+        if (err && err.code === "geo_pre_prompt_cancelled") {
+          EL.loadingMsg.innerHTML = "Localização não solicitada agora.<br><br>Feche o botão flutuante do iFood e tente novamente quando quiser.";
+          setTimeout(() => EL.loading.classList.add("oculto"), 2200);
+          return;
+        }
+        onGeoErro(err);
+      }, {
         enableHighAccuracy: true,
         timeout: 15000,
         maximumAge: 0
       });
-    } else {
-      EL.loadingMsg.textContent = "Geolocalização não disponível.";
-      setTimeout(() => EL.loading.classList.add("oculto"), 2000);
     }
 
     function iniciarWatch() {
-      if (watchId !== null || !("geolocation" in navigator)) return;
+      if (!fluxoGeoHabilitado || watchId !== null || !("geolocation" in navigator)) return;
       watchId = navigator.geolocation.watchPosition(onAtualizarPosicao, null, {
         enableHighAccuracy: false,
         maximumAge: 20000,
@@ -171,6 +243,22 @@
     document.addEventListener("visibilitychange", () => {
       document.hidden ? pararWatch() : iniciarWatch();
     });
+
+    if (EL.geoPermissionConfirm) {
+      EL.geoPermissionConfirm.addEventListener("click", () => fecharModalPermissaoGeo(true));
+      EL.geoPermissionCancel.addEventListener("click", () => fecharModalPermissaoGeo(false));
+      EL.geoPermissionClose.addEventListener("click", () => fecharModalPermissaoGeo(false));
+      EL.geoPermissionModal.addEventListener("click", e => {
+        if (e.target === EL.geoPermissionModal) fecharModalPermissaoGeo(false);
+      });
+      document.addEventListener("keydown", e => {
+        if (e.key === "Escape" && EL.geoPermissionModal.classList.contains("ativo")) {
+          fecharModalPermissaoGeo(false);
+        }
+      });
+    }
+
+    solicitarLocalizacaoInicial();
 
     /* ================================================
        MAPA
@@ -278,6 +366,8 @@
         primeiraVez = false;
       }
       atualizarRaioVisualDoUsuario(lat, lng);
+      fluxoGeoHabilitado = true;
+      if (watchId === null) iniciarWatch();
       EL.precisaoBadge.classList.add("visivel");
       EL.precisaoTexto.textContent = `GPS · ±${Math.round(accuracy)}m`;
       EL.loading.classList.add("oculto");
@@ -288,7 +378,6 @@
     } else {
       geoPendentes.push(onAtualizarPosicao);
     }
-    iniciarWatch();
 
     /* ================================================
        ESTADO DA UI
@@ -763,17 +852,23 @@
     /* ================================================
        BOTÃO MINHA LOCALIZAÇÃO
     ================================================ */
-    $("btn-localizacao").addEventListener("click", () => {
+    $("btn-localizacao").addEventListener("click", async () => {
       if (!("geolocation" in navigator)) { mostrarToast("⚠️ Geolocalização indisponível"); return; }
       mostrarToast("📍 Obtendo posição...");
-      navigator.geolocation.getCurrentPosition(pos => {
+      await solicitarLocalizacaoComAviso(pos => {
         const { latitude: lat, longitude: lng, accuracy } = pos.coords;
         map.flyTo([lat, lng], 16, { duration: 1.2 });
         atualizarUserMarker(lat, lng);
         EL.precisaoBadge.classList.add("visivel");
         EL.precisaoTexto.textContent = `GPS · ±${Math.round(accuracy)}m`;
         mostrarToast("✅ Localização atualizada!");
-      }, () => mostrarToast("❌ Não foi possível obter localização"), { enableHighAccuracy: true, timeout: 8000 });
+      }, err => {
+        if (err && err.code === "geo_pre_prompt_cancelled") {
+          mostrarToast("ℹ️ Feche o botão flutuante do iFood e tente novamente.");
+          return;
+        }
+        mostrarToast("❌ Não foi possível obter localização");
+      }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
     });
 
     /* ================================================
