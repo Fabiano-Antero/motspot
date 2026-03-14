@@ -1091,10 +1091,10 @@
     ======================== */
 
     /* Botão redondo (estado recolhido) */
-    #btn-busca {
+    #btn-busca,
+    #btn-share-qr {
       position: fixed;
       top: 20px;
-      right: 20px;
       z-index: 910;
       width: 50px;
       height: 50px;
@@ -1108,8 +1108,12 @@
       justify-content: center;
       transition: background .2s, box-shadow .2s, opacity .3s, transform .3s;
     }
-    #btn-busca:hover { background: var(--search-btn-bg-hover); box-shadow: 0 4px 24px rgba(0,0,0,0.6); }
-    #btn-busca:active { transform: scale(0.93); }
+    #btn-busca { right: 20px; }
+    #btn-share-qr { right: 80px; }
+    #btn-busca:hover,
+    #btn-share-qr:hover { background: var(--search-btn-bg-hover); box-shadow: 0 4px 24px rgba(0,0,0,0.6); }
+    #btn-busca:active,
+    #btn-share-qr:active { transform: scale(0.93); }
 
     /* Barra expandida — ocupa toda a largura do topo */
     #busca-barra {
@@ -1363,8 +1367,10 @@
       box-shadow: 0 0 0 2px rgba(255,23,68,0.18);
     }
 
-    #btn-busca.oculto {
+    #btn-busca.oculto,
+    #btn-share-qr.oculto {
       opacity: 0;
+      transform: scale(.92);
       pointer-events: none;
     }
 
@@ -1622,6 +1628,128 @@
       stroke-dasharray: 6 4;
     }
 
+
+
+    /* ========================
+       MODAL DE COMPARTILHAMENTO QR
+    ======================== */
+    .qr-share-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10010;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(4, 9, 18, 0.72);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .qr-share-modal.ativo {
+      display: flex;
+    }
+    .qr-share-dialog {
+      position: relative;
+      width: min(100%, 400px);
+      padding: 24px 20px 20px;
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(20, 28, 44, 0.98) 0%, rgba(12, 18, 30, 0.98) 100%);
+      border: 1px solid rgba(255,255,255,0.09);
+      box-shadow: 0 24px 80px rgba(0,0,0,0.42), 0 0 0 1px rgba(255,255,255,0.03) inset;
+      color: var(--text);
+      text-align: center;
+    }
+    .qr-share-close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      color: var(--muted);
+      font-size: 18px;
+      cursor: pointer;
+      transition: background .18s ease, color .18s ease, transform .18s ease;
+    }
+    .qr-share-close:hover {
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      transform: scale(1.03);
+    }
+    .qr-share-kicker {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .qr-share-title {
+      margin: 0;
+      font-family: var(--font-title);
+      font-size: 24px;
+      line-height: 1.18;
+      letter-spacing: -0.02em;
+    }
+    .qr-share-text {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .qr-share-code-wrap {
+      width: min(100%, 260px);
+      margin: 18px auto 0;
+      padding: 14px;
+      border-radius: 22px;
+      background: #fff;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.28);
+    }
+    .qr-share-image {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 14px;
+    }
+    .qr-share-copy-btn {
+      width: 100%;
+      min-height: 48px;
+      margin-top: 18px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: var(--search-btn-bg);
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.22);
+    }
+    .qr-share-copy-btn:hover {
+      background: var(--search-btn-bg-hover);
+      transform: translateY(-1px);
+    }
+    @media (max-width: 560px) {
+      .qr-share-modal {
+        align-items: flex-end;
+        padding: 12px;
+      }
+      .qr-share-dialog {
+        width: 100%;
+        border-radius: 24px 24px 18px 18px;
+        padding: 22px 16px 16px;
+      }
+      .qr-share-title {
+        font-size: 21px;
+      }
+      .qr-share-code-wrap {
+        width: min(100%, 232px);
+      }
+    }
 
     /* ========================
        MODAL PRÉ-PERMISSÃO DE GEOLOCALIZAÇÃO
