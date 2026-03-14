@@ -75,6 +75,20 @@
     </svg>
   </button>
 
+  <button id="btn-share-qr" title="Compartilhar app por QR Code" aria-label="Compartilhar app por QR Code">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 4h6v6H4z"/>
+      <path d="M14 4h6v6h-6z"/>
+      <path d="M4 14h6v6H4z"/>
+      <path d="M15 15h1"/>
+      <path d="M19 15h1"/>
+      <path d="M15 19h1"/>
+      <path d="M19 19h1"/>
+      <path d="M17 13v8"/>
+      <path d="M13 17h8"/>
+    </svg>
+  </button>
+
   <!-- Barra expandida -->
   <div id="busca-barra">
     <svg class="busca-barra-icone" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -328,6 +342,19 @@
         <button type="button" class="geo-permission-btn secundario" id="geo-permission-cancel">Agora não</button>
         <button type="button" class="geo-permission-btn primario" id="geo-permission-confirm">Continuar</button>
       </div>
+    </div>
+  </div>
+
+  <div id="qr-share-modal" class="qr-share-modal" hidden>
+    <div class="qr-share-dialog" role="dialog" aria-modal="true" aria-labelledby="qr-share-title">
+      <button type="button" class="qr-share-close" id="qr-share-close" aria-label="Fechar compartilhamento">✕</button>
+      <div class="qr-share-kicker">Compartilhar app</div>
+      <h2 id="qr-share-title" class="qr-share-title">Aponte a câmera para abrir o MotSpot</h2>
+      <p class="qr-share-text">Leia o QR Code para abrir o app direto no celular.</p>
+      <div class="qr-share-code-wrap">
+        <img src="assets/motspot-share-qr.png" alt="QR Code do MotSpot" class="qr-share-image" id="qr-share-image" />
+      </div>
+      <button type="button" class="qr-share-copy-btn" id="qr-share-copy">Copiar link</button>
     </div>
   </div>
 
