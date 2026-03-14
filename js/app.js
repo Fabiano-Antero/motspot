@@ -729,6 +729,69 @@
       }, cfg);
     });
 
+    function obterDayKeyDaOperacao(data = new Date()) {
+      const d = data instanceof Date ? new Date(data) : new Date(data || Date.now());
+      const ano = d.getFullYear();
+      const mes = String(d.getMonth() + 1).padStart(2, "0");
+      const dia = String(d.getDate()).padStart(2, "0");
+      return `${ano}-${mes}-${dia}`;
+    }
+
+    function obterIsoDaProximaMeiaNoite(data = new Date()) {
+      const d = data instanceof Date ? new Date(data) : new Date(data || Date.now());
+      d.setHours(24, 0, 0, 0);
+      return d.toISOString();
+    }
+
+    function obterExpiracaoDoPin(pin) {
+      if (!pin) return 0;
+
+      if (pin.expires_at) {
+        const expiracao = new Date(pin.expires_at).getTime();
+        if (Number.isFinite(expiracao)) return expiracao;
+      }
+
+      const base = pin.timestamp ? new Date(pin.timestamp) : new Date();
+      if (Number.isNaN(base.getTime())) return 0;
+      base.setHours(24, 0, 0, 0);
+      return base.getTime();
+    }
+
+    function pinExpirou(pin) {
+      const expiracao = obterExpiracaoDoPin(pin);
+      return expiracao > 0 && expiracao <= Date.now();
+    }
+
+    async function limparPinsExpirados(data = dadosCache, opcoes = {}) {
+      const {
+        mostrarToastQuandoLimpar = false,
+        silencioso = true
+      } = opcoes;
+
+      if (!data || typeof data !== "object") return 0;
+
+      const updates = {};
+      let removidos = 0;
+
+      Object.entries(data).forEach(([key, pin]) => {
+        if (pinExpirou(pin)) {
+          updates[key] = null;
+          removidos += 1;
+        }
+      });
+
+      if (!removidos) return 0;
+
+      await REF.update(updates);
+
+      if (mostrarToastQuandoLimpar && !silencioso) {
+        const sufixo = removidos === 1 ? "pin expirado removido" : "pins expirados removidos";
+        mostrarToast(`🕛 ${removidos} ${sufixo}.`);
+      }
+
+      return removidos;
+    }
+
     /* ================================================
        FIREBASE — RENDERIZAÇÃO COM THROTTLE
     ================================================ */
